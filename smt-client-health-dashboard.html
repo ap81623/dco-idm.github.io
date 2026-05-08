@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SMT Client Health Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #0D0D0D;
+      --surface: #1A1A1A;
+      --accent: #CC0000;
+      --text-primary: #FFFFFF;
+      --text-secondary: #AAAAAA;
+      --border: #2A2A2A;
+      --green: #00C48C;
+      --yellow: #FFB800;
+      --red: #CC0000;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: Inter, sans-serif; background:var(--bg); color:var(--text-primary); }
+    .container { max-width: 1480px; margin: 0 auto; padding: 20px; }
+    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
+    .logo { font-weight:800; font-size:26px; letter-spacing:1px; color:var(--accent); }
+    .title { text-align:right; }
+    .title h1 { margin:0; font-size:24px; }
+    .title p { margin:5px 0 0; color:var(--text-secondary); font-size:12px; }
+    .table-card,.metric-card{ background:var(--surface); border-radius:12px; padding:16px; }
+    table { width:100%; border-collapse: collapse; }
+    th { text-align:left; color:var(--text-secondary); font-size:12px; text-transform:uppercase; letter-spacing:.08em; padding-bottom:10px; }
+    td { padding:12px 8px; border-top:1px solid var(--border); font-size:14px; }
+    tr { cursor:pointer; }
+    tr.selected { background: rgba(204,0,0,0.15); }
+    .health-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:8px; }
+    .health { display:flex; align-items:center; }
+    .clickable-dot { cursor: pointer; }
+    .grid { margin-top:16px; display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; }
+    .section-label { color:var(--accent); font-size:10px; text-transform:uppercase; letter-spacing:.15em; font-weight:700; }
+    .metric-name { margin-top:4px; color:var(--text-secondary); font-size:13px; text-transform:uppercase; }
+    .value-row{ display:flex; justify-content:space-between; align-items:baseline; margin:8px 0; }
+    .value { font-size:31px; font-weight:800; }
+    .trend { font-size:12px; color:var(--text-secondary); }
+    .trend.up { color:var(--green); }
+    .trend.down { color:var(--red); }
+    .small { color:var(--text-secondary); font-size:12px; margin-top:6px; }
+    .bar-wrap { height:8px; background:#111; border-radius:999px; overflow:hidden; margin-top:8px; }
+    .bar { height:100%; background:var(--accent); }
+    .split-bar { display:flex; height:10px; border-radius:999px; overflow:hidden; margin-top:8px; }
+    .milestones { margin-top:8px; display:grid; grid-template-columns:repeat(4,1fr); gap:6px; font-size:11px; }
+    .milestone { background:#151515; border:1px solid var(--border); border-radius:8px; padding:5px; color:var(--text-secondary); text-align:center; }
+    .milestone.done { border-color:var(--green); color:var(--text-primary); }
+    .pill { padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; display:inline-block; }
+    canvas{ max-height:52px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">SMT</div>
+      <div class="title">
+        <h1>CLIENT HEALTH DASHBOARD</h1>
+        <p id="scopeLabel">Portfolio View</p>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <table>
+        <thead><tr><th>Account</th><th>Tier</th><th>ACV</th><th>Renewal</th><th>Health</th><th>ADM</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <div class="grid" id="cards"></div>
+  </div>
+
+<script>
+const now = new Date('2026-05-08T00:00:00Z');
+const accounts = [
+  {name:'Apex Arena', tier:'Pilot', acv:120000, renewal:'2026-08-20', adm:'Marcus', metrics:{engagement:61, engagementTrend:7, engagementHistory:[42,48,50,56,58,61], completion:68, completionTrend:6, completionHistory:[49,54,57,60,64,68], featuresActive:2, featuresTotal:5, featuresMissing:['VIP Rewards','Referral Quest','Partner Offers'], featuresTrend:2, selfServe:36, selfServeTrend:9, selfHistory:[18,20,23,28,31,36], ttv:52, milestones:2, expansion:'In Discussion', expansionValue:80000, execTouchDays:18}},
+  {name:'Meridian Bank', tier:'Expand', acv:285000, renewal:'2026-06-18', adm:'Sarah', metrics:{engagement:43, engagementTrend:-12, engagementHistory:[62,58,55,51,47,43], completion:57, completionTrend:-9, completionHistory:[73,69,66,63,60,57], featuresActive:2, featuresTotal:6, featuresMissing:['Referral','Sweepstakes','API Triggers','Loyalty Wallet'], featuresTrend:0, selfServe:21, selfServeTrend:-6, selfHistory:[35,33,30,28,25,21], ttv:74, milestones:1, expansion:'Not Started', expansionValue:120000, execTouchDays:46}},
+  {name:'Global Sports Federation', tier:'Grow', acv:510000, renewal:'2026-11-12', adm:'Marcus', metrics:{engagement:89, engagementTrend:5, engagementHistory:[80,82,84,86,88,89], completion:91, completionTrend:4, completionHistory:[83,85,87,88,90,91], featuresActive:7, featuresTotal:8, featuresMissing:['Predictive Polling'], featuresTrend:5, selfServe:72, selfServeTrend:8, selfHistory:[51,55,60,65,69,72], ttv:24, milestones:4, expansion:'Closed-Won', expansionValue:420000, execTouchDays:9}},
+  {name:'Skyline Entertainment', tier:'Expand', acv:240000, renewal:'2026-07-01', adm:'Priya', metrics:{engagement:58, engagementTrend:-4, engagementHistory:[68,66,64,62,60,58], completion:63, completionTrend:-5, completionHistory:[76,73,70,68,66,63], featuresActive:3, featuresTotal:5, featuresMissing:['Partner Offers','Season Pass'], featuresTrend:1, selfServe:34, selfServeTrend:-2, selfHistory:[43,42,40,38,36,34], ttv:48, milestones:2, expansion:'In Discussion', expansionValue:110000, execTouchDays:37}},
+  {name:'First Coast Financial', tier:'Maximize', acv:1100000, renewal:'2027-01-14', adm:'Sarah', metrics:{engagement:84, engagementTrend:3, engagementHistory:[76,78,80,82,83,84], completion:86, completionTrend:2, completionHistory:[80,81,82,84,85,86], featuresActive:6, featuresTotal:7, featuresMissing:['Dynamic Trivia'], featuresTrend:4, selfServe:67, selfServeTrend:6, selfHistory:[50,54,57,61,64,67], ttv:29, milestones:4, expansion:'Closed-Won', expansionValue:250000, execTouchDays:15}}
+];
+let selected = null; let charts = [];
+const scoreBand = (v,g,y)=> v>=g?100:v>=y?60:20;
+const expansionScore = s => s==='Closed-Won'?100:s==='In Discussion'?60:20;
+function health(account){const m=account.metrics;const score= scoreBand(m.engagement,75,50)*.2+scoreBand(m.completion,80,60)*.2+scoreBand((m.featuresActive/m.featuresTotal)*100,80,50)*.25+scoreBand(m.selfServe,60,30)*.15+scoreBand(100-m.ttv,70,40)*.1+expansionScore(m.expansion)*.1;return score>=70?'green':score>=45?'yellow':'red';}
+function hc(c){return c==='green'?'#00C48C':c==='yellow'?'#FFB800':'#CC0000';}
+function renewalColor(date){const d=(new Date(date)-now)/86400000;return d<=30?'#CC0000':d<=90?'#FFB800':'#AAAAAA';}
+function fmtAcv(v){return v>=1000000?`$${(v/1000000).toFixed(1)}M`:`$${Math.round(v/1000)}K`;}
+function computePortfolio(){const t=accounts.length;const sum=(k)=>accounts.reduce((a,b)=>a+b.metrics[k],0)/t;return {name:'Portfolio', tier:'-', acv:accounts.reduce((a,b)=>a+b.acv,0), renewal:'-', adm:'-', metrics:{engagement:Math.round(sum('engagement')),engagementTrend:2,engagementHistory:[66,66,67,68,68,69],completion:Math.round(sum('completion')),completionTrend:1,completionHistory:[72,73,73,73,73,73],featuresActive:accounts.reduce((a,b)=>a+b.metrics.featuresActive,0),featuresTotal:accounts.reduce((a,b)=>a+b.metrics.featuresTotal,0),featuresMissing:['Varies by account'],featuresTrend:3,selfServe:Math.round(sum('selfServe')),selfServeTrend:3,selfHistory:[39,41,42,45,46,46],ttv:Math.round(sum('ttv')),milestones:3,expansion:'In Discussion',expansionValue:980000,execTouchDays:25}};}
+function renderTable(){const tbody=document.getElementById('rows');tbody.innerHTML='';accounts.forEach((a,i)=>{const h=health(a);const tr=document.createElement('tr');if(selected===i)tr.className='selected';tr.innerHTML=`<td>${a.name}</td><td>${a.tier}</td><td>${fmtAcv(a.acv)}</td><td style='color:${renewalColor(a.renewal)}'>${new Date(a.renewal).toLocaleDateString('en-US',{month:'short',year:'numeric'})}</td><td><span class='health'><span class='health-dot clickable-dot' style='background:${hc(h)}' data-scroll='true'></span>${h==='green'?'Healthy':h==='yellow'?'At Risk':'Critical'}</span></td><td>${a.adm}</td>`;tr.onclick=()=>{selected=selected===i?null:i;render();};tbody.appendChild(tr);});}
+function card(section,name,value,trend,trendUp,healthColor,history,body=''){return `<div class='metric-card'><div class='section-label'>${section}</div><div class='metric-name'>${name}</div><div class='value-row'><div class='value'>${value}</div><div class='trend ${trendUp?'up':'down'}'>${trendUp?'▲':'▼'} ${Math.abs(trend)}%</div></div><div class='health'><span class='health-dot' style='background:${healthColor}'></span><span class='small'>Health status</span></div><canvas></canvas>${body}</div>`;}
+function renderCards(){charts.forEach(c=>c.destroy());charts=[];const data=selected===null?computePortfolio():accounts[selected];const h=selected===null?health(accounts[2]):health(data);
+ const m=data.metrics;const cards=document.getElementById('cards');cards.innerHTML='';
+ cards.innerHTML += card('Engagement','End User Engagement Rate',`${m.engagement}%`,m.engagementTrend,m.engagementTrend>=0,hc(scoreBand(m.engagement,75,50)==100?'green':scoreBand(m.engagement,75,50)==60?'yellow':'red'),m.engagementHistory,`<div class='small'>Benchmark: 87%</div>`);
+ cards.innerHTML += card('Engagement','Campaign Completion Rate',`${m.completion}%`,m.completionTrend,m.completionTrend>=0,hc(scoreBand(m.completion,80,60)==100?'green':scoreBand(m.completion,80,60)==60?'yellow':'red'),m.completionHistory,`<div class='small'>Benchmark: 87%</div>`);
+ const fr = m.featuresActive/m.featuresTotal*100;
+ cards.innerHTML += `<div class='metric-card'><div class='section-label'>Adoption</div><div class='metric-name'>Features Activated vs. Contracted</div><div class='value'>${m.featuresActive} / ${m.featuresTotal}</div><div class='bar-wrap'><div class='bar' style='width:${fr}%;background:${hc(scoreBand(fr,80,50)==100?'green':scoreBand(fr,80,50)==60?'yellow':'red')}'></div></div><div class='small'>Change since onboarding: ${m.featuresTrend>0?'+':''}${m.featuresTrend}</div><div class='small'>Not active: ${m.featuresMissing.join(', ')}</div></div>`;
+ cards.innerHTML += `<div class='metric-card'><div class='section-label'>Adoption</div><div class='metric-name'>Self-Serve vs. PM-Assisted Ratio</div><div class='value'>${m.selfServe}% / ${100-m.selfServe}%</div><div class='split-bar'><div style='width:${m.selfServe}%;background:#00C48C'></div><div style='width:${100-m.selfServe}%;background:#555'></div></div><div class='trend ${m.selfServeTrend>=0?'up':'down'}'>${m.selfServeTrend>=0?'▲':'▼'} ${Math.abs(m.selfServeTrend)}% vs prior period</div><div class='small'>Target: 70% self-serve by month 6</div></div>`;
+ const pavg = computePortfolio().metrics.ttv;
+ cards.innerHTML += `<div class='metric-card'><div class='section-label'>Commercial</div><div class='metric-name'>Time-to-Value</div><div class='value'>${m.ttv} <span style='font-size:16px;color:#AAA;'>days</span></div><div class='small'>Portfolio avg: ${pavg} days</div><div class='milestones'>${['Contract Signed','Onboarding','First Campaign Live','Expansion Ready'].map((x,i)=>`<div class='milestone ${i<m.milestones?'done':''}'>${x}</div>`).join('')}</div></div>`;
+ cards.innerHTML += `<div class='metric-card'><div class='section-label'>Commercial</div><div class='metric-name'>Expansion Status</div><div class='pill' style='background:${m.expansion==='Closed-Won'?'#103d30':m.expansion==='In Discussion'?'#3d2d10':'#3d1010'};color:${m.expansion==='Closed-Won'?'#00C48C':m.expansion==='In Discussion'?'#FFB800':'#FF6B6B'}'>${m.expansion}</div><div class='small'>Renewal: ${selected===null?'Mixed portfolio':new Date(data.renewal).toLocaleDateString('en-US',{month:'short',year:'numeric'})}</div><div class='small'>${m.expansion==='Closed-Won'?'Expansion ACV won':'ACV at risk / potential'}: ${fmtAcv(m.expansionValue)}</div><div class='small' style='color:${m.execTouchDays>30?'#FFB800':'#AAAAAA'}'>Days since exec touchpoint: ${m.execTouchDays}</div></div>`;
+ document.querySelectorAll('.metric-card canvas').forEach((el,idx)=>{const series=[m.engagementHistory,m.completionHistory,[],m.selfHistory,[],[]][idx];if(!series.length) return;charts.push(new Chart(el,{type:'line',data:{labels:series.map((_,i)=>i+1),datasets:[{data:series,borderColor:'#CC0000',borderWidth:2,tension:.35,pointRadius:0}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}},maintainAspectRatio:false}}));});
+ document.getElementById('scopeLabel').textContent=selected===null?'Portfolio View':`${data.name} View`;
+}
+function render(){renderTable();renderCards();document.querySelectorAll('[data-scroll]').forEach(x=>x.onclick=(e)=>{e.stopPropagation();document.getElementById('cards').scrollIntoView({behavior:'smooth'});});}
+render();
+</script>
+</body>
+</html>
